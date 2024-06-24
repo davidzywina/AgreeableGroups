@@ -155,8 +155,8 @@ function sl2Lift(H,m)
     if n eq m then return H; end if;
 
     SL2m:=SL(2,Integers(m));
-    SL2n,pi:=ChangeRing(SL2m,Integers(n));
-    assert H subset SL2n;
+    //SL2n,pi:=ChangeRing(SL2m,Integers(n));
+    assert false notin {Determinant(h) eq 1: h in Generators(H)};  
 
     a:=&*[p^Valuation(m,p): p in PrimeDivisors(n)]; 
     b:=m div a;
@@ -173,7 +173,10 @@ function sl2Lift(H,m)
 
     S:={SL2m!c: c in S}; 
 
-    H1:=sub<SL2m| S join {g @@ pi: g in Generators(H)} >;
+    //H1:=sub<SL2m| S join {g @@ pi: g in Generators(H)} >;
+
+    H1:=sub<SL2m| S join {SL2m!LiftMatrix(g,1): g in Generators(H)} >;
+    
     return H1;
 end function;
 

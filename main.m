@@ -1,9 +1,11 @@
 load "EarlierCode/GL2GroupTheory.m";
+AttachSpec("EarlierCode/magma.spec");
 
 /*  Load precomputed data containing all agreeable subgroups 
     of GL(2,Zhat) of genus at most 1.   It also contains some
     intermediate groups that will be useful for morphisms later.
 */    
+
 I:=Open("Data/agreeable_groups_genus_0_and_1.dat", "r");
 Families:=AssociativeArray();
 repeat

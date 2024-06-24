@@ -1,5 +1,3 @@
-
-
 /*
     We compute all the agreeable subgroups of GL(2,Zhat) of genus at most 1, up to conjugacy, and save them to a file.
 
@@ -13,7 +11,7 @@ NewModularCurveRec := recformat<
         cyclic_invariants, cyclic_models, cyclic_generators, cover_with_same_commutator_subgroup, psi :SeqEnum,   
     has_point, has_infinitely_many_points, has_nonCM_point, is_agreeable, is_entangled, extraneous, is_serre_type_model: BoolElt, 
     G, H, Hc, Gc :GrpMat, 
-    Hc_gen: SeqEnum, 
+    Hc_gen, ell_adic_labels : SeqEnum,
     C:Crv, 
     map_to_jline, pi :List, 
     sturm: FldRatElt,
@@ -21,6 +19,7 @@ NewModularCurveRec := recformat<
     det_index, det_disc :RngIntElt, det_primary, det_field :SeqEnum,
     added: BoolElt
     >;	 
+
 /*  The above record contains more fields than are currently used.  Here are the used fields:        
         N, level:   the level of the group
         G       :   the open subgroup of GL(2,Zhat) given as a subgroup of GL(2,Z/NZ), where N
@@ -31,7 +30,7 @@ NewModularCurveRec := recformat<
         is_agreeable:  true if G is agreeable and false otherwise
 
         H       :   the intersection of G with SL(2,Zhat); given as a subgroup of SL(2,Z/NZ)
-        sl2level:   the level of H
+        sl2level:   the level of H in SL(2,Zhat); it will be a divisor of N
         CPname  :   Cummins-Pauli label of corresponding congruence subgroup of SL(2,Z)
         degree  :   degree of the morphism X_G to the j-line
 
@@ -53,47 +52,31 @@ NewModularCurveRec := recformat<
 */
  
 load "../EarlierCode/GL2GroupTheory.m";
+AttachSpec("../EarlierCode/magma.spec");
 
 
-function InitializeModularCurve(X : level_minimal:=false)
-    /*  This function computes some of the fields for a record X
-        assuming X`G and X`H have been given already.
-        If "level_minimal" is true, then we make G a subgroup of GL(Z/NZ) where N is
-        the level of G.
+function InitializeModularCurve(X : level_known:=false)
+    /*  This function computes some of the fields for a record X of type "NewModularCurveRec"
+        assuming X`G and X`H have been given already.     We assume -I in H     
     */
 
-    if level_minimal then
-        N:=#BaseRing(X`G);
-    else
-        N:=gl2Level(X`G);
-    end if;
-    X`N:=N;  X`level:=N;
-
-    if N eq 1 then        
-        X`index:=1;
-        X`degree:=1;
-        X`det_index:=1; 
-        X`det_primary:=[]; 
-        X`det_field:=[];
-        X`sl2level:=1;
-        return X;
-    end if;
-    
-    if N ne #BaseRing(X`G) then
-        X`G:=ChangeRing(X`G,Integers(N));
-        X`H:=ChangeRing(X`H,Integers(N));
-    end if;
-    X`sl2level:=sl2Level(X`H);
-
-    N:=X`N;
     G:=X`G;
-    H:=X`H;
+    H:=X`H; 
+    H`SL:=true;
+    N,G:=GL2Level(G);
+    H:=SL2Project(H,N);
     
-    X`index:=Index(GL(2,Integers(N)),G);
-    X`degree:=Index(SL(2,Integers(N)),H);            
-    X`det_index:=GL2DetIndex(G);
+    X`N:=N;  X`level:=N;  
+    X`sl2level:=SL2Level(H);    
+    X`index:=GL2Index(G);
+    X`degree:=SL2Index(H);   // assumes -I in H     
+    X`det_index:=GL2DeterminantIndex(G);
     assert X`index eq X`degree * X`det_index;    
 
+    X`G:=G;
+    X`H:=H;
+
+  
     U,iota:=UnitGroup(Integers(N));
     D:=sub<U | [ Determinant(g) @@ iota: g in Generators(G) ]>;
     D_qt:=quo<U|D>;
@@ -161,6 +144,7 @@ function FindCommutatorSubgroupSL(G)
             gens:   generators for the image of [G,G] modulo M
             index:  index of [G,G] in SL(2,Z_N).
     */
+    G`SL:=true; 
     N:=#BaseRing(G);
     P:=PrimeDivisors(N);
 
@@ -168,7 +152,7 @@ function FindCommutatorSubgroupSL(G)
     if #P eq 1 then
         p:=P[1];
         
-        M:=sl2Level(G);
+        M:=SL2Level(G);
         // Deal directly with the case M=1
         if M eq 1 then
             if p eq 2 then
@@ -180,25 +164,25 @@ function FindCommutatorSubgroupSL(G)
             end if;
         end if;
 
-        G:=ChangeRing(G,Integers(M));
-        if M eq 2 then M:=4; G:=sl2Lift(G,4); end if; 
+        G:=SL2Project(G,M);
+        if M eq 2 then M:=4; G:=SL2Lift(G,4); end if; 
 
         repeat
-            G_M:=sl2Lift(G,M);     
-            S:=CommutatorSubgroup(G_M);
+            G_M:=SL2Lift(G,M);     
+            S:=CommutatorSubgroup(G_M); S`SL:=true;
        
-            G_Mp:=sl2Lift(G,M*p);
-            Sp:=CommutatorSubgroup(G_Mp);
+            G_Mp:=SL2Lift(G,M*p);
+            Sp:=CommutatorSubgroup(G_Mp);  Sp`SL:=true;
 
-            i_M:=Index(SL(2,Integers(M)),S);
-            i_Mp:=Index(SL(2,Integers(M*p)),Sp);
+            i_M:=SL2Index(S);   
+            i_Mp:=SL2Index(Sp); 
             
             if  i_M ne i_Mp then
                 M:=M*p;
             end if;        
         until i_M eq i_Mp;
     
-        M:=sl2Level(S); 
+        M:=SL2Level(S); 
         if M eq 1 then return 1, [], 1; end if;
 
         gens:= [Eltseq( SL(2,Integers(M))!g ): g in Generators(S)];
@@ -219,14 +203,14 @@ function FindCommutatorSubgroupSL(G)
         M:=M*Mp;
     end for;
     // The level of [G,G] divides M.
-    G_:=sl2Lift(G,LCM([M,N]));  
-    G_:=ChangeRing(G_,Integers(M));  
+    G_:=SL2Lift(G,LCM([M,N]));  
+    G_:=SL2Project(G_,M);  
     S:=CommutatorSubgroup(G_);  // have lifted group so that this will be the desired commutator subgroup
+    S`SL:=true;
 
-    M:=sl2Level(S);
-    S:=ChangeRing(S,Integers(M));
+    M,S:=SL2Level(S);
     gens:= [Eltseq(g): g in Generators(S)];
-    index:=Index(SL(2,Integers(M)),S);
+    index:=SL2Index(S);
 
     return M, gens, index; 
 end function;
@@ -251,7 +235,7 @@ comm_level:=AssociativeArray();
    this level in the array "comm_level".
 */
 for Gamma in L do  // run over Cummins-Pauli data
-    // Find group H0 in SL(2,Z/level) corresponding to Gamma
+
     Gamma`name;
     if Gamma`level ne 1 then 
         level:=Gamma`level;
@@ -260,22 +244,22 @@ for Gamma in L do  // run over Cummins-Pauli data
         level:=2;
         matgens:=[[1,1,0,1],[1,0,1,1]];
     end if;
-    SL2:=SL(2,Integers(level));
-    H0:=sub<SL2|matgens>;
+    SL2:=SL2Ambient(level);
+    H0:=sub<SL2|matgens>; H0`SL:=true;
     assert SL2![-1,0,0,-1] in H0;
 
     M1,gens1,index1:=FindCommutatorSubgroupSL(H0);
-    H1:=sl2Lift(H0,M1);
+    H1:=SL2Lift(H0,M1); 
     Q1,iota1:=quo< H1 | sub<SL(2,Integers(M1))|gens1> >;
 
     M2:=1;
     if GCD(M1,2) eq 1 then M2:=M2*4; end if;
     if GCD(M1,3) eq 1 then M2:=M2*3; end if;
     if M2 ne 1 then
-        Q2,iota2:=quo<SL(2,Integers(M2)) | CommutatorSubgroup(SL(2,Integers(M2))) >;
+        Q2,iota2:=quo<SL2Ambient(M2) | CommutatorSubgroup(SL2Ambient(M2)) >;
     else
         M2:=2;
-        Q2,iota2:=quo<SL(2,Integers(2)) | SL(2,Integers(2)) >;
+        Q2,iota2:=quo<SL(2,Integers(2)) | SL(2,Integers(2)) >; 
         // This is just the trivial group.  Really want M1=1, but magma doesn't like matrices in M_2(Z/(1)).
     end if;    
 
@@ -283,11 +267,11 @@ for Gamma in L do  // run over Cummins-Pauli data
     assert IsAbelian(Q);
 
     M:=LCM(M1,M2);
-    H:=sl2Lift(H0,M);
+    H:=SL2Lift(H0,M);
 
     iota:=hom<H->Q | [ alpha[1](iota1(H.i)) * alpha[2](iota2(H.i)) : i in [1..Ngens(H)] ] >;
 
-    assert #Q*Index(SL(2,Integers(M)),H)/index1 eq #Q2;
+    assert #Q*SL2Index(H)/index1 eq #Q2;
 
     comm_map[Gamma`name]:=iota;
     comm_level[Gamma`name]:=M;  
@@ -304,9 +288,10 @@ Families:=AssociativeArray();
     - X_G has genus at most 1.
 */
 
-label:=0;  // TODO(?): add a meaningful label!
 for r in L do
+    label:=1; 
     r`name;
+
     // We vary over all the congruence subgroups of SL(2,Z) that contain -I, up to conjugacy in GL(2,Z), with genus 0 or 1;
     // it gives rise to an open subgroup H of SL(2,Zhat) containing -I.
 
@@ -314,24 +299,25 @@ for r in L do
         level:=r`level;
         matgens:=r`matgens;
     else
-        // j-line treated special since magma does not like SL(2,Z/1)        
+        // j-line treated special since Magma does not like SL(2,Z/1)        
         level:=2;
         matgens:=[[1,1,0,1],[1,0,1,1]];
     end if;
-    SL2:=SL(2,Integers(level));
-    H:=sub<SL2|matgens>;
+    SL2:=SL2Ambient(level);   //SL(2,Integers(level));
+    H:=sub<SL2|matgens>; H`SL:=true;
     assert SL2![-1,0,0,-1] in H;
-    
+
     level:=LCM(12,level) * 2;
-    H:=sl2Lift(H,level);
+    H:=SL2Lift(H,level);
         
-    // Add scalars to H, to get a group G0 that we view as an open subgroup
+    // Adjoin scalars to H, to get a group G0 that we view as an open subgroup
     // of GL(2,Zhat) with level dividing "level".
     G0:=AdjoinScalars(H);
 
     // We want the intersection of G0 and SL(2,Zhat) to be H; 
     // if not, we go to the next congruence subgroup
-    a:=#(SL(2,BaseRing(G0)) meet G0)/#H;
+
+    a:=SL2Order(SL2Intersection(G0))/SL2Order(H);
     if a gt 1 then continue r; end if;
     
     // We are looking for agreeable subgroups G of GL(2,Zhat) containing G0 whose intersection with
@@ -342,322 +328,84 @@ for r in L do
     Q,iota:=quo<N|G0>;
 
     // Construct sequence "MM" of subgroups of Q corresponding to desired subgroups G
-    S0:=N meet SL(2,BaseRing(G0));
+    S0:=SL2Intersection(N);  // todo: OK?? OLD: N meet SL(2,BaseRing(G0));
     S1:=iota(S0);
     MM:=[M`subgroup: M in Subgroups(Q)];
     MM:=[M: M in MM | #(M meet S1) eq 1];
-    
     //assert true notin { IsConjugate(Q,MM[i],MM[j]) : i,j in [1..#MM] | i lt j };
-    
-    for M in MM do
-        G:=M @@ iota;
-
-        X:=rec<NewModularCurveRec | G:=G, H:=H, CPname:=r`name, genus:=r`genus>;
+  
+    for M_ in MM do
+        G:=M_ @@ iota;
+        
+        X:=rec<NewModularCurveRec | G:=G, H:=SL2Lift(H,#BaseRing(G)), CPname:=r`name, genus:=r`genus>;
         X:=InitializeModularCurve(X);
 
-        label_:=IntegerToString(label);
-        Families[label_]:=X;
-        Families[label_]`label:=label_;
-        label:=label+1;
+        if X`N eq 1 then 
+            X`Hc:=CommutatorSubgroup(GL(2,Integers(2)));
+            X`commutator_index:=2;
+            X`is_agreeable:=true;
 
-        label;
-    end for;
- 
-end for;    
-
-
-"Computing commutator subgroups of our groups.";
-for k in Sort([k: k in Keys(Families)]) do
-    k;
-
-    N:=Families[k]`N;
-    if N eq 1 then 
-        Families[k]`Hc:=CommutatorSubgroup(GL(2,Integers(2)));
-        Families[k]`commutator_index:=2;
-        continue k;
-    end if;
-
-    CPname:=Families[k]`CPname;
-    M:=comm_level[CPname];
-    phi:=comm_map[CPname];
-    H:=Domain(phi);
-    Q:=Codomain(phi);
-
-    G:= ChangeRing(gl2Lift(Families[k]`G,LCM(N,M)), Integers(M));
-
-    // Compute Hc=[G,G]
-    found:=false;
-    W:=sub<Q|{ phi(a*b*a^(-1)*b^(-1)): a,b in Generators(G)}>;
-    Hc:=W @@ phi;
-
-    //Since we only used commutators of generators of G, it is not clear that 
-    // Hc is the correct thing.  We possibly increase it so that it stable under
-    // conjugation by G (which will mean we have the right thing)
-    while not found do
-        Hc:=W @@ phi;
-        found:=true;
-        for g in Generators(G) do
-            W_:=sub<Q|{phi(g*h*g^(-1)) : h in Generators(Hc)}>;
-            if W_ ne W then
-                W:=sub<Q|Generators(W) join Generators(W_)>;
-                found:=false;
-                break g;
-            end if;
-        end for;
-    end while;
-
-    //We now compute the level D of Hc;  the code "D:=sl2Level(Hc);" is too slow here.
-    D:=M;
-    for d in Sort([d: d in Divisors(M) | d gt 1 and d mod Families[k]`sl2level eq 0]) do
-        Hd,red:=ChangeRing(H,Integers(d));
-        ker_red:=Kernel(red);
-        if phi(ker_red) subset W then
-            D:=d;
-            break d;
-        end if;
-    end for;    
-
-    Hc:=ChangeRing(Hc,Integers(D));
-    Families[k]`Hc:=Hc;
-    Families[k]`commutator_index:=Index(SL(2,BaseRing(Hc)),Hc);
-end for;
-
-
-"Removing groups that are not agreeable.";
-//  Some of our groups Families[k]`G need not be agreeable; we remove these.
-keys:=Keys(Families);
-for k in keys do
-    X:=Families[k];
-    if X`N eq 1 then continue k; end if;
-    assert ContainsScalars(X`G);
-
-    // Note that X`N is the level of X`G viewed as a subgroup of GL(2,Zhat).
-    // Note that the group X`Hc will be given modulo its level now.
-    if Set(PrimeDivisors(X`N)) subset Set(PrimeDivisors(#BaseRing(X`Hc))) then continue k; end if;
-
-    //  Group is not agreeable and needs to be removed! 
-    Remove(~Families,k);
-end for;
-
-for k in Keys(Families) do
-    Families[k]`is_agreeable:=true;  // all the remaining groups are agreeable
-end for;
-
-
-
-"Conjugating groups so we have small index inclusions.";
-
-base:=Rep({k: k in Keys(Families) | Families[k]`N eq 1});
-todo:={k: k in Keys(Families)} diff {base};
-
-while todo ne {} do    
-    "todo",#todo;
-    min:=Minimum({ Families[k]`index: k in todo});
-    k:=Rep({k: k in todo | Families[k]`index eq min});
-
-    N:=Families[k]`N;
-    assert N ne 1;
-    
-    G:=Families[k]`G;
-    GL2:=GL(2,Integers(N));
-    H:=Families[k]`H;
-
-    // First look for quadratic covers
-    NG:=Normalizer(GL2,G);
-    T:=Transversal(NG,G);
-    T:=[t: t in T | t^2 in G and t notin G ]; 
-    if #T ne 0 then
-        ind:=[ GL2DetIndex(sub<GL2|Generators(G) join {t}>) : t in T];
-        d:=Minimum(ind);
-        T:=[T[i]: i in [1..#T] | ind[i] eq d];
-    end if;
-
-    if #T eq 0 then
-        T:=[t: t in Transversal(GL2,G) | t notin G];
-        ind:=[Index( sub<GL2|Generators(G) join {t}> ,G) : t in T];
-        d:=Minimum(ind);
-        T:=[T[i]: i in [1..#T] | ind[i] eq d];
-    end if;
-        
-    t:=T[1];
-
-    G0:=sub<GL2| Generators(G) join {t}>;
-    N0:=gl2Level(G0);
-    if N0 eq 1 then
-        Families[k]`sup:=base;
-        todo:=todo diff {k};                
-    else
-        G0:=ChangeRing(G0,Integers(N0));
-        GL2:=GL(2,BaseRing(G0));
-        ind0:=Index(GL2,G0);
-        ind1:=GL2DetIndex(G0);
-
-        found:=false;
-        for k0 in Keys(Families) do
-            X:=Families[k0];
-            if X`N ne N0 or X`index ne ind0 or X`det_index ne ind1 then
-                continue k0;
-            end if;        
-            b,A:=IsConjugate(GL2,G0,X`G);
-            if b then 
-                found:=true; 
-                Families[k]`sup:=k0;
-
-                // lift A to GL(2,Z/N)
-                GL2_,red:=ChangeRing(GL(2,Integers(N)),Integers(N0));
-                A:=(GL2_!A) @@ red;
-                
-                //Conjugate our groups
-                Families[k]`G:=Conjugate(Families[k]`G,A);
-                Families[k]`H:=Conjugate(Families[k]`H,A);        
-
-                Hc:=Families[k]`Hc;
-                N1:=LCM(N,#BaseRing(Hc));
-                GL2_,red:=ChangeRing(GL(2,Integers(N1)),Integers(N));
-                A:=(GL2_!A) @@ red;
-                A:=GL(2,BaseRing(Hc))!A;
-                Families[k]`Hc:=Conjugate(Hc,A); 
-
-                todo:=todo diff {k};
-                break k0;
-            end if;
-        end for;
-    
-        if not found then
-            // add a new group to our list
-            H0:=G0 meet SL(2,BaseRing(G0));
-            X:=rec<NewModularCurveRec | G:=G0, H:=H0>;
-            X:=InitializeModularCurve(X : level_minimal:=true);
-
-            M0,gens0,index0:=FindCommutatorSubgroup( gl2Lift(G0,LCM(#BaseRing(G0),6)) );
-            Hc:=sub<SL(2,Integers(M0))|gens0>;
-            
-            X`Hc:=Hc;
-            X`commutator_index:=Index(SL(2,Integers(M0)),Hc);
-            X`added:=true;  // remember it was added
-
-            assert X`commutator_index eq index0;
-
-            label_:=IntegerToString(label);
+            label_:=IntegerToString(X`N) cat "." cat X`CPname cat "." cat IntegerToString(label);
             Families[label_]:=X;
             Families[label_]`label:=label_;
             label:=label+1;
 
-            todo:=todo join {label_};
+            label_;
+            continue M_;
         end if;
-    end if;
-    
-end while;
 
+        CPname:=X`CPname;
+        M:=comm_level[CPname];
+        phi:=comm_map[CPname];
+        Q:=Codomain(phi);
 
-"Deal with recently added groups.";
-// We have added new groups.  Assign a Cummins-Pauli label and add their genus.
-keys0:={k: k in Keys(Families) | not assigned Families[k]`CPname};
-for k in keys0 do
-    H:=Families[k]`H;
-    N:=sl2Level(H);
-    if N eq 1 then 
-        Families[k]`CPname:=[r: r in L | r`level eq 1][1]`name;
-        continue k; 
-    end if; 
-    H:=ChangeRing(H,Integers(N));
-    for r in L do
-        if r`level eq N then
-            b:=IsConjugate(GL(2,Integers(N)),H,sub<SL(2,Integers(N))|r`matgens>);
-            if b then
-                Families[k]`CPname:=r`name; 
-                Families[k]`genus:=r`genus;                 
-                continue k;
-            end if;
+        G:= GL2Project(GL2Lift(X`G,LCM(X`N,M)), M);
+
+        // Compute Hc=[G,G]
+        found:=false;
+        W:=sub<Q|{ phi(a*b*a^(-1)*b^(-1)): a,b in Generators(G)}>;
+        Hc:=W @@ phi; 
+
+        // Since we only used commutators of a set of generators of G, it is not clear that 
+        // Hc is the correct thing.  We possibly increase it so that it stable under
+        // conjugation by G (which will mean we have the right thing)
+        while not found do
+            Hc:=W @@ phi;
+            found:=true;
+            for g in Generators(G) do
+                W_:=sub<Q|{phi(g*h*g^(-1)) : h in Generators(Hc)}>;
+                if W_ ne W then
+                    W:=sub<Q|Generators(W) join Generators(W_)>;
+                    found:=false;
+                    break g;
+                end if;
+            end for;
+        end while;
+        
+        Hc`SL:=true;
+        D:=SL2Level(Hc);
+
+        Hc:=SL2Project(Hc,D);
+        X`Hc:=Hc;
+        X`commutator_index:=SL2Index(Hc);
+
+        // We now check if we are dealing with an agreeable group.
+        assert ContainsScalars(X`G);
+
+        // Note that X`N is the level of X`G viewed as a subgroup of GL(2,Zhat).
+        // Note that the group X`Hc is given modulo its level.
+        X`is_agreeable:= Set(PrimeDivisors(X`N)) subset Set(PrimeDivisors(#BaseRing(X`Hc)));
+
+        if X`is_agreeable then            
+            label_:=IntegerToString(X`N) cat "." cat X`CPname cat "." cat IntegerToString(label);
+            Families[label_]:=X;
+            Families[label_]`label:=label_;
+            label:=label+1;
+
+            label_;
         end if;
-    end for;
-    assert false; // shouldn't get to here!
-end for;
-
-// For the recently added groups, work out which are agreeable
-for k in Keys(Families) do 
-    if assigned Families[k]`is_agreeable then continue k; end if;
-    G:=Families[k]`G;
-    Hc:=Families[k]`Hc;
-    assert ContainsScalars(G); 
-
-    if Set(PrimeDivisors(#BaseRing(G))) subset Set(PrimeDivisors(#BaseRing(Hc))) then 
-        assert false;  
-        // We should not be in this case since this would mean we missed an agreeable group of genus at most 1.
-    else
-        Families[k]`is_agreeable:=false;
-    end if;
-end for;
-
-"For the groups constructed, find a smaller set of generators.";
-// We look for a relatively small list of generators of Hc; this is done in a rather dumb way
-for k in Keys(Families) do
-    Hc:=Families[k]`Hc;
-    N0:=#BaseRing(Hc);
-    gens1:={};
-    B:=sub<SL(2,Integers(N0)) | gens1>;
-    while B ne Hc do
-        T:=[t: t in Transversal(Hc,B) | t notin B];
-        m:=Maximum({#sub<SL(2,Integers(N0))|gens1 join {h}> : h in T});
-        assert exists(a){h: h in T | #sub<SL(2,Integers(N0))|gens1 join {h}> eq m };
-        gens1:=gens1 join {a};
-        B:=sub<SL(2,Integers(N0)) | gens1>;
-    end while;
-    Hc:=B;
-    Families[k]`Hc:=Hc;
-end for;
-
-// We look for a relatively small list of generators of H; this is done in a rather dumb way
-for k in Keys(Families) do
-    if Families[k]`N eq 1 then continue k; end if;
-    H:=Families[k]`H;
-    N0:=Families[k]`sl2level;
-    N :=Families[k]`N;
-    if N0 eq 1 then
-        Families[k]`H:=SL(2,Integers(N));
-        continue k; 
-    end if;
-    H:=ChangeRing(H,Integers(N0));
-
-    gens1:={};
-    B:=sub<SL(2,Integers(N0)) | gens1>;
-    while B ne H do
-        T:=[t: t in Transversal(H,B) | t notin B];
-        m:=Maximum({#sub<SL(2,Integers(N0))|gens1 join {h}> : h in T});
-        assert exists(a){h: h in T | #sub<SL(2,Integers(N0))|gens1 join {h}> eq m };
-        gens1:=gens1 join {a};
-        B:=sub<SL(2,Integers(N0)) | gens1>;
-    end while;
-    H:=sl2Lift(B,N);
-    Families[k]`H:=H;
-end for;
-
-// We look for a relatively small list of generators of G; this is done in a rather dumb way 
-// starting with generators of H.
-for k in Keys(Families) do
-    if Families[k]`N eq 1 then continue k; end if;
-    H:=Families[k]`H;
-    G:=Families[k]`G;
-    N:=Families[k]`N;
-
-    gens1:=[H.i: i in [1..Ngens(H)]];
-
-    UN,iotaN:=UnitGroup(Integers(N));
-    U:=sub<UN| [Determinant(g) @@ iotaN : g in Generators(G)]>;
-    P,I:=PrimaryAbelianBasis(U);
-    P:=[ iotaN(p) : p in P ];
-    T:=Transversal(G,H);
-    gens2:=[];
-    for p in P do
-        assert exists(t){t: t in T | Determinant(t) eq p};
-        gens2:=gens2 cat [t];
-    end for;
-
-    B:=sub<GL(2,Integers(N))|gens1 cat gens2>;
-    assert sub<UN| [Determinant(g) @@ iotaN : g in Generators(B)]> eq U;
-    Families[k]`G:=B;
-    
-end for;
+    end for; 
+end for;    
 
 
 "Saving to file.";
